@@ -2,31 +2,32 @@ from bson import ObjectId
 import json
 
 
+def get_properties(providerID):
+    providers = {
+        "0": "Namayeshgah",
+        "0.0": "Namayeshgah",
+        "9.0": "Dreamdays",
+        "9": "Dreamdays",
+        "10.0": "Vanila",
+        "10": "Vanila",
+        "23": "Seatravel",
+        "23.0": "Seatravel",
+        "11": "Parsian",
+        "11.0": "Parsian"
+    }
+    provider_data = eval(providers[providerID] + '()')
+    return provider_data
+
+
 class schema:
     def __init__(self, SchemaID, Lid, DmnID, providerID):
         self.providerID = providerID
         with open('schema.js') as f:
             self.schema = json.load(f)
 
-    def get_properties(self, providerID):
-        providers = {
-            "0": "Namayeshgah",
-            "0.0": "Namayeshgah",
-            "9.0": "Dreamdays",
-            "9": "Dreamdays",
-            "10.0": "Vanila",
-            "10": "Vanila",
-            "23": "Seatravel",
-            "23.0": "Seatravel",
-            "11": "Parsian",
-            "11.0": "Parsian"
-        }
-        provider_data = eval(providers[providerID] + '()')
-        return provider_data
-
     def return_data(self):
         result = {}
-        provider_data = self.get_properties(self.providerID)
+        provider_data = get_properties(self.providerID)
         provider_data = {
             "_id": ObjectId("5ba9fc558b9f893966b68e8e"),
             "Address": "Scanderbeg Square, Build. 8 , Entr. 1street Tirana",

@@ -26,7 +26,7 @@ class Core(Basis):
 class schema(Core):
     def __init__(self, name, usedforid, group, SchemaID, Lid, DmnID):
         super().__init__(name, usedforid, group, SchemaID, Lid, DmnID)
-        with open('schema.js') as f:
+        with open('schema.j') as f:
             self.data = json.load(f)
 
     def get_properties(self, providerID):
