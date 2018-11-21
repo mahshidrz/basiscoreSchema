@@ -1,13 +1,15 @@
 from bson import ObjectId
-import json
+import time
+import sys
+import ast
 import copy
 import pymssql
 import requests
 import collections
 import xmltodict
 from lxml import html
-from vanila_data_integration_new import VanilaMappingProccess
-from seatravel_data_integration import SeatravelMappingProccess
+from hotels.vanila_data_integration_new import VanilaMappingProccess
+from hotels.seatravel_data_integration import SeatravelMappingProccess
 
 
 class Basis(object):
@@ -55,8 +57,23 @@ class Fetch(Schema):
     def __init__(self, providerID, SchemaID, Lid, DmnID):
         super().__init__(SchemaID, Lid, DmnID)
         self.providerID = providerID
+        self.providers = {
+            "0": "Namayeshgah",
+            "0.0": "Namayeshgah",
+            "9.0": "Dreamdays",
+            "9": "Dreamdays",
+            "10.0": "VanilaMappingProccess",
+            "10": "VanilaMappingProccess",
+            "23": "SeatravelMappingProccess",
+            "23.0": "SeatravelMappingProccess",
+            "11": "Parsian",
+            "11.0": "Parsian"
+        }
+        self.dictionary = self.get_dictionary_provider()
+        self.provider_obj = eval(self.providers[str(self.providerID)] + '(' + self.dictionary + ')')
 
     def get_XML(self, lid, usedforID):
+        start_time = time.time()
         db = pymssql.connect(server='172.20.19.46', user='sa', password='Salam1Salam2', database='exhibitor')
         cursor = db.cursor()
         cursor.execute('''declare @xml nvarchar(max)
@@ -72,9 +89,15 @@ class Fetch(Schema):
              select @xml'''.format(10, usedforID, lid, 0, 0, 0))
 
         XML = cursor.fetchall()
+        cursor.close()
+        db.close()
+        for i in XML:
+            XML = i[0]
+        print("--- get_XML %s seconds ---" % (time.time() - start_time))
         return XML
 
     def get_dictionary_provider(self):
+        start_time = time.time()
         url = "http://user.efeh.com/get-dictionary.bc"
 
         querystring = {"providerid": str(self.providerID)}
@@ -86,24 +109,13 @@ class Fetch(Schema):
         }
 
         response = requests.request("GET", url, data=payload, headers=headers, params=querystring)
-
+        print("--- get_dictionary_provider %s seconds ---" % (time.time() - start_time))
         return response.text
 
-    def get_properties(self):
-        providers = {
-            "0": "Namayeshgah",
-            "0.0": "Namayeshgah",
-            "9.0": "Dreamdays",
-            "9": "Dreamdays",
-            "10.0": "VanilaMappingProccess",
-            "10": "VanilaMappingProccess",
-            "23": "SeatravelMappingProccess",
-            "23.0": "SeatravelMappingProccess",
-            "11": "Parsian",
-            "11.0": "Parsian"
-        }
-        dictionary = self.get_dictionary_provider()
-        provider_data = eval(providers[str(self.providerID)] + '(' + dictionary + ').' + 'export_data()')
+    def provider_data(self):
+        start_time = time.time()
+        provider_data = self.provider_obj.export_data()
+        # print(provider_data)
         usedFor_ID = provider_data['usedForID']
         method = provider_data['method']
         org_xml = self.get_XML(2, usedFor_ID)
@@ -113,9 +125,11 @@ class Fetch(Schema):
             result = self.XML_generator_update(provider_data, org_xml)
         else:
             result = None
+        print("--- provider_data %s seconds ---" % (time.time() - start_time))
         return result
 
     def XML_generator_insert(self, dict_result, org_xml):
+        start_time = time.time()
         dict_xml = xmltodict.parse(org_xml, process_namespaces=True)
         dict_XML = collections.OrderedDict(dict_xml)
 
@@ -151,12 +165,12 @@ class Fetch(Schema):
         dict_XML['root']['properties']['property'] = [item for index, item in enumerate(dict_XML['root']['properties']['property']) if index not in removed_property_index]
 
         # print(dict_XML)
-        out = xmltodict.unparse(dict_XML, pretty=True)
-        print(out)
-
-        return out
+        insert_out = xmltodict.unparse(dict_XML, full_document=False, pretty=True)
+        print("--- XML_generator_insert %s seconds ---" % (time.time() - start_time))
+        return insert_out
 
     def XML_generator_update(self, dict_result, org_xml):
+        start_time = time.time()
         dict_xml = xmltodict.parse(org_xml, process_namespaces=True)
         dict_XML = collections.OrderedDict(dict_xml)
         null_question = []
@@ -202,169 +216,35 @@ class Fetch(Schema):
 
         dict_XML['root']['properties']['property'] = [item for index, item in enumerate(dict_XML['root']['properties']['property']) if index not in removed_property_index]
 
-        print(dict_XML)
-        return self.providerID
+        update_out = xmltodict.unparse(dict_XML, full_document=False, pretty=True)
+        print("--- XML_generator_update %s seconds ---" % (time.time() - start_time))
+        return update_out
 
     def insert_into_SQL(self):
-        # xml = self.get_properties()
-        xml = '''<root>
-	<properties LID="2" MId="10" usedForId="1290136" script="" helpUrl="/PrpHelpUrl.aspx" submitClass="submit_xml" uiType="form" multi="false" submitImageUrl="/images/submit/submit.png" errorUrl="/xmlerror_print.json">
-		<property question="Hotel Name" prpid="1360" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_minlength="2" v_maxlength="100" v_required="true" class="CSS_150" type="text" order="3">JA Hatta Fort Hotel</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="star rating" prpid="1361" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_min="1" class="css_130" type="text" order="1" v_number="true">4</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="facilities" prpid="1367" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2369"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2213"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2054"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="155815"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2056"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2216"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="155819"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2061"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2062"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="144206"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2065"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="155826"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2067"></part>
-				</answer>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1367" value="2068"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="room facilities" prpid="1369" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1369" value="155850"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="ventilation system" prpid="1372" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1372" value="2096"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="country" prpid="10000005" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part type="textList" order="3" class="CSS_199" url="/jsonsearch/jsonsearch.htm?mid2=10&amp;Prpid=10000005&amp;lid=2" text="United Arab Emirates" value="1002248"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="city" prpid="10000006" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part type="textList" order="3" class="CSS_199" url="/jsonsearch/jsonsearch.htm?mid2=10&amp;Prpid=10000006&amp;lid=2" text="Hatta" value="1176288"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="parking" prpid="2651" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=2651" value="2193"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="sport and entertainment" prpid="1374" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=1374" value="2207"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="shuttle" prpid="2671" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_minlength="2" v_maxlength="4000" class="CSS_140" type="checkList" order="3" url="/PrpfixUrl.aspx?Lid=2&amp;Prpid=2671" value="2243"></part>
-				</answer>
-			</answers>
-		</property>
-		<property question="Address" prpid="1379" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part class="css_244" type="largeText" order="3">Dubai-Hatta Road/P.O. Box 9277/Hatta</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="Phone" prpid="1380" multi="true">
-			<answers>
-				<answer valueId="0">
-					<part v_minlength="2" v_maxlength="4000" class="css_241" type="text" order="3">+97148099333</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="Fax" prpid="1381" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_minlength="2" v_maxlength="4000" class="css_241" type="text" order="3">+97148523561</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="Website" prpid="1382" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_minlength="2" v_maxlength="4000" class="CSS_250" type="text" order="3">https://www.jaresortshotels.com/propertyoverview/dubai/ja-hatta-fort-hotel</part>
-				</answer>
-			</answers>
-		</property>
-		<property question="GIATA" prpid="73547" multi="false">
-			<answers>
-				<answer valueId="0">
-					<part v_min="1" class="css_130" type="text" order="1" v_number="true">13829</part>
-				</answer>
-			</answers>
-		</property>
-	</properties>
-</root>
-'''
-        url = "http://172.20.19.46/test_jafarzadeh2.bc"
-        payload = {"xmldata": xml}
+        # try:
+        start_time = time.time()
+        XML = []
+        for i in range(0, 10):
+            xml = self.provider_data()
+            XML.append(xml)
+        for xml in XML:
+            url = "http://172.20.19.46/test_jafarzadeh2.bc"
+            payload = {"xmldata": xml}
 
-        response = requests.post(url, payload)
-        # print(response.text)
-        return response.text
+            response = (requests.post(url, payload)).text
+            try:
+                ast.literal_eval(response)
+                self.provider_obj.set_status('ok')
+            except:
+                self.provider_obj.set_status('error')
 
-        pass
+            print("--- insert_into_SQL %s seconds ---" % (time.time() - start_time))
+            return response
+        # except Exception as e:
+        #     print(sys.stderr, "does not exist")
+        #     print(sys.stderr, "Exception: %s" % str(e))
+        #     sys.exit(1)
 
 
 Schema(251, 2, 2452)
-print(Fetch(23, 251, 2, 2452).get_properties())
+print(Fetch(10, 251, 2, 2452).insert_into_SQL())
