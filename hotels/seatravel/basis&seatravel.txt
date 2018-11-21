@@ -1,0 +1,14 @@
+﻿seatravelname	                           basisname
+-------------------------------------------------------                 
+informationn.name	                   Hotel Name
+informationn.phoneNumber	           Phone
+informationn.faxNumber	                   Fax
+informationn.stars	                   star rating
+informationn.homePage	                   Website
+informationn.thumbnail	                   Thumbnail
+informationn.description.text	           description
+GiataId	                                   GIATA
+informationn.address.addressLines	   Address
+informationn.address.zipCode	           Postal Code
+informationn.address.geolocation	   GPS
+informationn.seasons.0.mediaFiles	   Original Photo
